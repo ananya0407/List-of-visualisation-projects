@@ -1,0 +1,531 @@
+---
+title: "Midterm"
+output: html_document
+---
+
+```{r} 
+library(dplyr)
+library(reshape2)
+library(stringr)
+library(usmap)
+library(ggplot2)
+library(data.table)
+library(lubridate)
+```
+
+```{r}
+#1
+#selecting the required rows for plotting
+Market_info<-select(farmers_market_info,MarketName,State,Organic,Bakedgoods,Cheese,Crafts,Flowers,Eggs,Seafood,Herbs,Vegetables,Honey,Jams,Maple,Meat,Nursery,Nuts,Plants,Poultry,Prepared,Soap,Trees,Wine,Coffee,Beans,Fruits,Grains,Juices,Mushrooms,PetFood,Tofu,WildHarvested)
+#converting all the NA's present to zero
+Market_info[is.na(Market_info)] <- 0
+#passing_names and passing_food is used to group together so that when the melt function happens it does not consider one ID alone but two. passing_names is the ID here and passing_food are the options required to be melted
+passing_names=c("MarketName","State")
+passing_food=c("Organic","Bakedgoods","Cheese","Crafts","Flowers","Eggs","Seafood","Herbs","Vegetables","Honey","Jams","Maple","Meat","Nursery","Nuts","Plants","Poultry","Prepared","Soap","Trees","Wine","Coffee","Beans","Fruits","Grains","Juices","Mushrooms","PetFood","Tofu","WildHarvested")
+#d passing the grouped values and melting the selected table
+melt_value=melt(Market_info,id.vars=passing_names,measure.vars=passing_food)
+#changing the Y values to 1 and N values to 0
+melt_value$value=ifelse(melt_value$value =='Y', 1,0)
+#filtering out and storing the values that are greater than zero in another df
+non_zero_terms=filter(melt_value,value>0)
+###l=summarise(group_by(non_zero_terms,State),value=sum(value))
+#Dropping the last value table as it is currently not required
+dropping_val=subset(non_zero_terms,select=-(value))
+#using pipe function to grroup by State and summarise function that is used to merge  all the food available in the particular State by using a ","
+temp<-dropping_val%>%
+  group_by(MarketName,State)%>%
+  summarise(Food_available=paste(variable,collapse=","))
+
+#used an external csv file categorising which ecozone and region the particular State belonged to and merging it with our current file(temp)
+merge_with_categories<-merge(temp,Categories,by.x="State",by.y="State")
+#This is used to count the number of ecozone and regions and give the count of it
+counting_val=count(merge_with_categories,Ecozones,Region)
+names(counting_val)[3]<-"count_of_markets"
+
+#This is used to plot the farmer's market in each ecozone
+ggplot(counting_val,aes(x = reorder(Ecozones,count_of_markets),y = count_of_markets,fill=Region)) + geom_bar(stat = "identity") + coord_flip() +xlab("Ecozone") +ylab("Count of Food Markets in Each ecozone and Region") +ggtitle("Farmer's Market in each ecozone and Region")+theme(legend.background = element_rect(size=0.5, linetype="solid", colour ="black"))
+
+#merging the external csv file with the values from the filtered data that are greater than zero
+merge_with_categories1<-merge(non_zero_terms,Categories,by.x="State",by.y="State")
+#This is used to count the number of ecozone and food_items and give the count of it
+counting_val2=count(merge_with_categories1,Ecozones,variable)
+names(counting_val2)[3]<-"count_of_food"
+
+#Here the food items that are present in each ecozone is plotted along with its count
+ggplot(counting_val2,aes(x = reorder(variable,count_of_food),y = count_of_food,fill=Ecozones)) + geom_bar(stat = "identity") +xlab("Food items") +ylab("Count") +ggtitle("Food items sold in each Ecozone")+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+theme(plot.title = element_text(hjust = 0.5))+theme(legend.background = element_rect(size=0.5, linetype="solid", colour ="black"))
+
+#selecting 2 columns alone from the already merged file with categories
+selection_table=select(merge_with_categories,Food_available,State)
+#count the number of States and give the some of it
+count_states<-count(merge_with_categories,State)
+#Arranging in descending order
+arrange_descending=arrange(count_states,desc(n))
+names(arrange_descending)[2]<-"count_of_markets1"
+
+#giving the top 10 states with highest farmer's market
+top10data=head(arrange_descending,10)
+ggplot(top10data,aes(x = reorder(State,count_of_markets1),y = count_of_markets1)) + geom_bar(stat = "identity",fill="#E69F00",) + coord_flip()+xlab("State") +ylab("Number of Farmer's Market present in each state") +ggtitle("Top 10 states with the highest number of Farmer's Market")
+
+#giving 10 states having least Farmer's Market
+least10data=tail(arrange_descending,10)
+ggplot(least10data,aes(x = reorder(State,count_of_markets1),y = count_of_markets1)) + geom_bar(stat = "identity",fill="#56B4E9") + coord_flip()+xlab("State") +ylab("Number of Farmer's Market present in each state") + ggtitle("10 states that need to establish more Farmer's Market")
+
+
+```
+
+```{r}
+#2
+#selecting the required columns from the farmers market
+select_foods<-select(farmers_market_info,State,Organic,Bakedgoods,Cheese,Crafts,Flowers,Eggs,Seafood,Herbs,Vegetables,Honey,Jams,Maple,Meat,Nursery,Nuts,Plants,Poultry,Prepared,Soap,Trees,Wine,Coffee,Beans,Fruits,Grains,Juices,Mushrooms,PetFood,Tofu,WildHarvested,)
+#changing all NA's to zero
+select_foods[is.na(select_foods)] <- 0
+#Melting the data(i.e.) converting it from wide to long format
+meltingofdata<-melt(select_foods, id="State")
+#used to replace Y values by 1 and N by 0
+meltingofdata$value=ifelse(meltingofdata$value =='Y', 1,0)
+#filtering out the values that are greater than zero
+greaterzero=filter(meltingofdata,value>0)
+#grouped by State and Food items and finding the count of each
+summarised=summarise(group_by(greaterzero,State,variable),sum=sum(value))
+#consedering a second dataframe called season 2 that takes all the season dates and State and forms a table
+season2<-select(farmers_market_info,State,Season1Date,Season2Date,Season3Date,Season4Date)
+#since there are some months in number and some in alphabetic format, substituting January and all the other months by the month's date and taking some random values for date and year(since we are going to extract only the month from it)
+season2$Season1Date<-gsub('January','01/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('February','02/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('March','03/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('April','04/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('May','05/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('June','06/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('July','07/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('August','08/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('September','09/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('October','10/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('November','11/20/2018',season2$Season1Date)
+season2$Season1Date<-gsub('December','12/20/2018',season2$Season1Date)
+
+#Similarly for season 2 Date column
+season2$Season2Date<-gsub('January','01/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('February','02/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('March','03/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('April','04/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('May','05/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('June','06/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('July','07/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('August','08/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('September','09/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('October','10/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('November','11/20/2018',season2$Season2Date)
+season2$Season2Date<-gsub('December','12/20/2018',season2$Season2Date)
+
+#Similarly for season 3 Date column
+season2$Season3Date<-gsub('January','01/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('February','02/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('March','03/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('April','04/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('May','05/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('June','06/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('July','07/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('August','08/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('September','09/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('October','10/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('November','11/20/2018',season2$Season3Date)
+season2$Season3Date<-gsub('December','12/20/2018',season2$Season3Date)
+
+#Similarly for season 4 Date column
+season2$Season4Date<-gsub('January','01/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('February','02/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('March','03/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('April','04/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('May','05/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('June','06/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('July','07/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('August','08/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('September','09/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('October','10/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('November','11/20/2018',season2$Season4Date)
+season2$Season4Date<-gsub('December','12/20/2018',season2$Season4Date)
+
+#creating 2 names for the columns 
+newColNames <- c("start", "end")
+
+#splitting one column into two, "to being the split word and anything before that in one column and after in another
+newCols <- colsplit(season2$Season1Date, "to", newColNames)
+#Similarly for the other seasons
+newColNames1 <- c("start1", "end1")
+newCols2<- colsplit(season2$Season2Date, "to", newColNames1)
+newColNames2 <- c("start2", "end2")
+newCols3 <- colsplit(season2$Season3Date, "to", newColNames2)
+newColNames3 <- c("start3", "end3")
+newCols4 <- colsplit(season2$Season4Date, "to", newColNames3)
+
+#merging all the four columns along with the season 2 column which has state and 4 season's dates
+mergetable=cbind(season2,newCols,newCols2,newCols3,newCols4)
+
+#extracting month alone from the mm/dd/yy for all the splitted columns
+mergetable$start=format(as.Date(mergetable$start, format = "%m/%d/%Y"),"%m")
+mergetable$end=format(as.Date(mergetable$end, format = "%m/%d/%Y"),"%m")
+mergetable$start1=format(as.Date(mergetable$start1, format = "%m/%d/%Y"),"%m")
+mergetable$end1=format(as.Date(mergetable$end1, format = "%m/%d/%Y"),"%m")
+mergetable$start2=format(as.Date(mergetable$start2, format = "%m/%d/%Y"),"%m")
+mergetable$end2=format(as.Date(mergetable$end2, format = "%m/%d/%Y"),"%m")
+mergetable$start3=format(as.Date(mergetable$start3, format = "%m/%d/%Y"),"%m")
+mergetable$end3=format(as.Date(mergetable$end3, format = "%m/%d/%Y"),"%m")
+#changing all the NA's to zero
+mergetable[is.na(mergetable)] <- 0
+#selecting only the required columns from the df and similarly for all 4 seasons
+selection1<- select(mergetable,State,start,end)
+selection2<- select(mergetable,State,start1,end1)
+selection3<- select(mergetable,State,start2,end2)
+selection4<- select(mergetable,State,start3,end3)
+
+#melting the first season df by state
+meltbyState<-melt(selection1,id="State")
+#filtering out and taking values that are greater than zero
+filter_than_zero=filter(meltbyState,value>0)
+#group by state alone
+group_by_State=group_by(filter_than_zero,State)
+
+#merging the summarised which is the first table with States and Food items along with the season 1 table
+group_by_State=merge(group_by_State,summarised,by="State",all=TRUE)
+
+#changing the months back to alphabets
+group_by_State$value<-gsub('01','January',group_by_State$value)
+group_by_State$value<-gsub('02','Febuary',group_by_State$value)
+group_by_State$value<-gsub('03','March',group_by_State$value)
+group_by_State$value<-gsub('04','April',group_by_State$value)
+group_by_State$value<-gsub('05','May',group_by_State$value)
+group_by_State$value<-gsub('06','June',group_by_State$value)
+group_by_State$value<-gsub('07','July',group_by_State$value)
+group_by_State$value<-gsub('08','August',group_by_State$value)
+group_by_State$value<-gsub('09','September',group_by_State$value)
+group_by_State$value<-gsub('10','October',group_by_State$value)
+group_by_State$value<-gsub('11','November',group_by_State$value)
+group_by_State$value<-gsub('12','December',group_by_State$value)
+
+#grouping by States, start or end of the season and the months and summarising the food items by using "," in between ones with the same States, start or end of the season and the month.
+group<-group_by_State%>% 
+  group_by(State,value,variable.x)%>%
+  summarise(Food_for_particular_region=paste(variable.y,collapse=","),sum=sum(sum))
+#group0<-filter(group,value>1200000)
+
+#following the same procedure above for all the 4 seasons
+meltbyState1<-melt(selection2,id="State")
+greaterzero1=filter(meltbyState1,value>0)
+group_by_State1=group_by(greaterzero1,State)
+merger1=merge(group_by_State1,summarised,by="State",all=TRUE)
+merger1$value<-gsub('01','January',merger1$value)
+merger1$value<-gsub('02','Febuary',merger1$value)
+merger1$value<-gsub('03','March',merger1$value)
+merger1$value<-gsub('04','April',merger1$value)
+merger1$value<-gsub('05','May',merger1$value)
+merger1$value<-gsub('06','June',merger1$value)
+merger1$value<-gsub('07','July',merger1$value)
+merger1$value<-gsub('08','August',merger1$value)
+merger1$value<-gsub('09','September',merger1$value)
+merger1$value<-gsub('10','October',merger1$value)
+merger1$value<-gsub('11','November',merger1$value)
+merger1$value<-gsub('12','December',merger1$value)
+group1<-merger1%>%
+  group_by(State,value,variable.x)%>%
+  summarise(Food_for_particular_region=paste(variable.y,collapse=","),sum=sum(sum))
+group1=na.omit(group1)
+
+#season 3
+meltbyState2<-melt(selection3,id="State")
+greaterzero2=filter(meltbyState2,value>0)
+group_by_State2=group_by(greaterzero2,State)
+merger2=merge(group_by_State2,summarised,by="State",all=TRUE)
+merger2$value<-gsub('01','January',merger2$value)
+merger2$value<-gsub('02','Febuary',merger2$value)
+merger2$value<-gsub('03','March',merger2$value)
+merger2$value<-gsub('04','April',merger2$value)
+merger2$value<-gsub('05','May',merger2$value)
+merger2$value<-gsub('06','June',merger2$value)
+merger2$value<-gsub('07','July',merger2$value)
+merger2$value<-gsub('08','August',merger2$value)
+merger2$value<-gsub('09','September',merger2$value)
+merger2$value<-gsub('10','October',merger2$value)
+merger2$value<-gsub('11','November',merger2$value)
+merger2$value<-gsub('12','December',merger2$value)
+group2<-merger2%>%
+  group_by(State,value,variable.x)%>%
+  summarise(Food_for_particular_region=paste(variable.y,collapse=","),sum=sum(sum))
+group2=na.omit(group2)
+
+#season 4
+meltbyState3<-melt(selection4,id="State")
+greaterzero3=filter(meltbyState3,value>0)
+group_by_State3=group_by(greaterzero3,State)
+merger3=merge(group_by_State3,summarised,by="State",all=TRUE)
+merger3$value<-gsub('01','January',merger3$value)
+merger3$value<-gsub('02','Febuary',merger3$value)
+merger3$value<-gsub('03','March',merger3$value)
+merger3$value<-gsub('04','April',merger3$value)
+merger3$value<-gsub('05','May',merger3$value)
+merger3$value<-gsub('06','June',merger3$value)
+merger3$value<-gsub('07','July',merger3$value)
+merger3$value<-gsub('08','August',merger3$value)
+merger3$value<-gsub('09','September',merger3$value)
+merger3$value<-gsub('10','October',merger3$value)
+merger3$value<-gsub('11','November',merger3$value)
+merger3$value<-gsub('12','December',merger3$value)
+group3<-merger3%>%
+  group_by(State,value,variable.x)%>%
+  summarise(Food_for_particular_region=paste(variable.y,collapse=","),sum=sum(sum))
+
+#changing District of Columbia to D.C. (easier to represent)
+group3$State <- gsub("District of Columbia", "D.C.", group3$State)
+#omitting NA's
+group3=na.omit(group3)
+#changing the column names to month as it changes during melt function
+names(group)[2]<-"Months"
+names(group1)[2]<-"Months"
+names(group2)[2]<-"Months"
+names(group3)[2]<-"Months"
+
+#filtering and sorting the seasons and creating dfs based on start or end of the season
+filtering_start_group3<-filter(group3,variable.x=="start3")
+filtering_end_group3<-filter(group3,variable.x=="end3")
+filtering_start_group2<-filter(group2,variable.x=="start2")
+filtering_end_group2<-filter(group2,variable.x=="end2")
+filtering_start_group1<-filter(group1,variable.x=="start1")
+filtering_end_group1<-filter(group1,variable.x=="end1")
+filtering_start_group<-filter(group,variable.x=="start")
+filtering_end_group<-filter(group,variable.x=="end")
+
+#States selling most items during season 4 start
+ggplot(data=filtering_start_group3, aes(x=State, y=sum)) +geom_point(aes(color=Months),size=3)+ggtitle("Count of states selling food items during start of Season 4")+ylab("count")
+
+#States selling most items during season 4 end
+ggplot(data=filtering_end_group3, aes(x=State, y=sum)) + geom_point(aes(color=Months),size=3)+ggtitle("Count of states selling food items during end of Season 4")+ylab("count")
+
+#States selling most items during season 3 start
+ggplot(data=filtering_start_group2, aes(x=State, y=sum)) + geom_point(aes(color=Months))+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling food items during start of Season 3")+ylab("count")
+
+#States selling most items during season 3 end
+ggplot(data=filtering_end_group2, aes(x=State, y=sum)) + geom_point(aes(color=Months))+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling food items during end of Season 3")+ylab("count")
+
+#States selling most items during season 2 start
+ggplot(data=filtering_start_group1, aes(x=State, y=sum)) + geom_point(aes(color=Months))+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling food items during start of Season 2")+ylab("count")
+
+#States selling most items during season 2 end
+ggplot(data=filtering_end_group1, aes(x=State, y=sum)) + geom_point(aes(color=Months))+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling food items during end of Season 2")+ylab("count")
+
+#since the data is large to represent, dividing the data by half and half for both start and end
+head1<-head(filtering_start_group,190)
+tail1<-tail(filtering_start_group,190)
+head2<-head(filtering_end_group,182)
+tail2<-head(filtering_end_group,181)
+
+#States selling most food during start of season one (first half)
+ggplot(data=head1, aes(x=State, y=sum)) + geom_point(aes(color=Months))+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling food items during start of Season 1(1)")+ylab("count")
+
+#States selling most food during end of season one (first half)
+ggplot(data=tail1, aes(x=State, y=sum)) + geom_point(aes(color=Months))+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling  food items during end of Season 1(1)")+ylab("count")
+
+#States selling most food during start of season one (second half)
+ggplot(data=head2, aes(x=State, y=sum,fill=Months,)) + geom_point(aes(color=Months),size=0.9)+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Count of states selling most food items during start of Season 1(2)")+ylab("count")
+
+#States selling most food during end of season one (second half)
+ggplot(data=tail2, aes(x=State, y=sum,fill=Months,)) + geom_point(aes(color=Months),size=0.9)+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("xshfd")+ggtitle("Count of states selling food items during end of Season 1(2)")+ylab("count")
+#better representation for last one.
+
+```
+
+```{r}
+#3
+#selecting the necessary columns required for plotting from the farmers_market_info
+selected<-select(farmers_market_info,State,Organic,Bakedgoods,Cheese,Crafts,Flowers,Eggs,Seafood,Herbs,Vegetables,Honey,Jams,Maple,Meat,Nursery,Nuts,Plants,Poultry,Prepared,Soap,Trees,Wine,Coffee,Beans,Fruits,Grains,Juices,Mushrooms,PetFood,Tofu,WildHarvested)
+#changing all the Y valus to 1 and N to 0 in all the food items
+selected$Organic<-ifelse(selected$Organic =='Y', 1,0)
+selected$Bakedgoods<-ifelse(selected$Bakedgoods =='Y', 1,0)
+selected$Cheese<-ifelse(selected$Cheese =='Y', 1,0)
+selected$Crafts<-ifelse(selected$Crafts =='Y', 1,0)
+selected$Flowers<-ifelse(selected$Flowers =='Y', 1,0)
+selected$Eggs<-ifelse(selected$Eggs =='Y', 1,0)
+selected$Seafood<-ifelse(selected$Seafood =='Y', 1,0)
+selected$Herbs<-ifelse(selected$Herbs =='Y', 1,0)
+selected$Vegetables<-ifelse(selected$Vegetables =='Y', 1,0)
+selected$Honey<-ifelse(selected$Honey =='Y', 1,0)
+selected$Jams<-ifelse(selected$Jams =='Y', 1,0)
+selected$Maple<-ifelse(selected$Maple =='Y', 1,0)
+selected$Meat<-ifelse(selected$Meat =='Y', 1,0)
+selected$Nursery<-ifelse(selected$Nursery =='Y', 1,0)
+selected$Nuts<-ifelse(selected$Nuts =='Y', 1,0)
+selected$Plants<-ifelse(selected$Plants =='Y', 1,0)
+selected$Poultry<-ifelse(selected$Poultry =='Y', 1,0)
+selected$Prepared<-ifelse(selected$Prepared =='Y', 1,0)
+selected$Soap=ifelse(selected$Soap =='Y', 1,0)
+selected$Trees=ifelse(selected$Trees =='Y', 1,0)
+selected$Wine=ifelse(selected$Wine =='Y', 1,0)
+selected$Coffee=ifelse(selected$Coffee =='Y', 1,0)
+selected$Beans=ifelse(selected$Beans =='Y', 1,0)
+selected$Fruits=ifelse(selected$Fruits =='Y', 1,0)
+selected$Grains=ifelse(selected$Grains =='Y', 1,0)
+selected$Juices=ifelse(selected$Juices =='Y', 1,0)
+selected$Mushrooms=ifelse(selected$Mushrooms =='Y', 1,0)
+selected$PetFood=ifelse(selected$PetFood =='Y', 1,0)
+selected$Tofu=ifelse(selected$Tofu =='Y', 1,0)
+selected$WildHarvested=ifelse(selected$WildHarvested =='Y', 1,0)
+
+#changing all the NA's to zero
+selected[is.na(selected)] <- 0
+
+temp2<-selected %>%
+  #using mutate in creating a column called Fresh foods and adding all the fresh foods to it
+  mutate(FreshFoods=Organic+Bakedgoods+Cheese+Eggs+Seafood+Herbs+Vegetables+Meat+Poultry+Beans+Fruits+Grains+Mushrooms+Tofu+WildHarvested)%>%
+  #Similarly for all categories as well
+  mutate(PackedFoods=Honey+Jams+Maple+Nuts+Prepared+PetFood)%>%
+  mutate(HomeAndDecor=Crafts+Flowers+Nursery+Plants+Soap+Trees)%>%
+  mutate(Bevarages=Wine+Coffee+Juices)
+
+#grouping each category by using State and sum-ming the values of each food category
+summarise_food=summarise(group_by(temp2,State),Freshfood=sum(FreshFoods),PackedFood=sum(PackedFoods),HomeandDecor=sum(HomeAndDecor),Bevarage=sum(Bevarages))
+
+#melting the table using ID as the state
+melt_food=melt(summarise_food,id="State")
+names(melt_food)[2]<-"Type_of_food"
+names(melt_food)[3]<-"Count"
+
+#taking all states here and comparing the grouped food items in each state and how it is doing
+ggplot(data=melt_food, aes(x=State, y=Count, fill=Type_of_food)) + geom_bar(stat ="identity",position='dodge')+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Total representation of how many food product mix is being sold in USA")+theme(legend.background = element_rect(size=0.5, linetype="solid", colour ="black"))
+
+#since the above bar graph is not too clear, the food items are represented seperately depending on how they are doing in all the states, therefore filtering out the respective categories alone
+Fresh_food<-filter(melt_food,Type_of_food=="Freshfood")
+Packed_food<-filter(melt_food,Type_of_food=="PackedFood")
+Home_Decor<-filter(melt_food,Type_of_food=="HomeandDecor")
+Beverage<-filter(melt_food,Type_of_food=="Bevarage")
+
+#Fresh food in each state
+ggplot(data=Fresh_food, aes(reorder(x=State,-Count),y=Count)) + geom_bar(stat = "identity", fill ="#56B4E9",color="black")+ theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Fresh Food in each State")+theme(plot.title = element_text(hjust = 0.5))+xlab("States")+ylab("Count")
+
+#Packed food in each state
+ggplot(data=Packed_food, aes(reorder(x=State,-Count), y=Count)) + geom_bar(stat = "identity",fill = "#A4A4A4",color="black")+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Packed Food in each State")+theme(plot.title = element_text(hjust = 0.5))+xlab("States")+ylab("Count")
+
+#Home and Decor in each State
+ggplot(data=Home_Decor, aes(reorder(x=State,-Count), y=Count)) + geom_bar(stat = "identity",fill = "darkred",color="black")+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Home and Decor in each State")+theme(plot.title = element_text(hjust = 0.5))+xlab("States")+ylab("Count")
+
+#Beverage in each State
+ggplot(data=Beverage, aes(reorder(x=State,-Count), y=Count)) + geom_bar(stat = "identity",fill = "#E69F00",color="black")+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ggtitle("Beverage in each State")+theme(plot.title = element_text(hjust = 0.5))+xlab("States")+ylab("Count")
+
+#using the below command we compute which is the most sold product mix in USA, we can see that it is Fresh Food 
+max_state_val<-setDT(melt_food)[, .SD[which.max(Count)], State]
+#Computing the count of fresh food sold entirely
+total_fresh_foods_in_USA<-sum(max_state_val$Count)
+#We get 42161 as the value
+
+
+```
+
+```{r}
+#4
+#Selecting the columns from farmers_market_info used for plotting
+select_payment=select(farmers_market_info,MarketName,Credit,WIC,WICcash,SFMNP,SNAP)
+
+#changing all the Y valus to 1 and N to 0 in all the payment mode
+select_payment$Credit=ifelse(select_payment$Credit =='Y', 1,0)
+select_payment$WIC=ifelse(select_payment$WIC =='Y', 1,0)
+select_payment$WICcash=ifelse(select_payment$WICcash =='Y', 1,0)
+select_payment$SFMNP=ifelse(select_payment$SFMNP =='Y', 1,0)
+select_payment$SNAP=ifelse(select_payment$SNAP =='Y', 1,0)
+
+#grouping them by Market Name and adding every payment
+summarise_function=summarise(group_by(select_payment,MarketName),Credit=sum(Credit),WIC=sum(WIC),WICcash=sum(WICcash),SFMNP=sum(SFMNP),Snap=sum(SNAP))
+#melting the table with Marketname as ID
+melting_payment = melt(summarise_function,id= "MarketName")
+#now from the above table we group them by the payment mode and find the sum of the payment method
+final_summarise=summarise(group_by(melting_payment,variable),count=sum(value))
+names(final_summarise)[1]<-"Most_popular_payment_mode_in_each_county"
+names(final_summarise)[2]<-"Count" 
+
+#Count of each payment method used in the country
+ggplot(data=final_summarise, aes(x=Most_popular_payment_mode_in_each_county, y=Count, group=1)) +
+  geom_line(linetype = "dashed")+ xlab("Payment mode")+ylab("Sum of payment mode used")+ggtitle("Total Count of Payment method/mode used in Farmer's Market")+theme(plot.title = element_text(hjust = 0.5))+geom_point()
+
+#Selecting the columns from farmers_market_info used for plotting
+countydata<-select(farmers_market_info,County,Credit,WIC,WICcash,SFMNP,SNAP)
+#melting thetable by taking ID as county
+meltcountydata<-melt(countydata,id="County")
+#changing all the Y values to 1 and N to 0 in all the payment mode
+meltcountydata$value=ifelse(meltcountydata$value =='Y', 1,0)
+#grpuping them by County and payment and finding the sum
+consolidate_data<-summarise(group_by(meltcountydata,County,variable),sum=sum(value))
+#Taking values greater than zero alone
+filter_countydata<-filter(consolidate_data,sum>0)
+#arranging them in Descending order
+arranged_countydata=arrange(filter_countydata,desc(sum))
+removed_na_countydata<-na.omit(arranged_countydata)
+
+#Taking only the top 20 data for plotting
+top20data<-head(removed_na_countydata,20)
+top20data$County <- gsub("District of Columbia", "D.C.", top20data$County)
+names(top20data)[2]<-"Type_of_Payment"
+names(top20data)[3]<-"Count"
+
+#Top 20 data on payment mode differing with the county
+ggplot(data=top20data, aes(x=County, y=Count, group=Type_of_Payment)) +
+  geom_line(aes(linetype=Type_of_Payment, color=Type_of_Payment))+
+  geom_point(aes(color=Type_of_Payment))+ ggtitle("How the payment mode differs for Top 20 counties")+ theme(legend.position="top")+theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+```{r}
+#5
+#Selecting the columns from farmers_market_info used for plotting
+selected_food_items=select(farmers_market_info,State,Organic,Bakedgoods,Cheese,Crafts,Flowers,Eggs,Seafood,Herbs,Vegetables,Honey,Jams,Maple,Meat,Nursery,Nuts,Plants,Poultry,Prepared,Soap,Trees,Wine,Coffee,Beans,Fruits,Grains,Juices,Mushrooms,PetFood,Tofu,WildHarvested)
+
+#melting the table with State as ID
+meltselection<-melt(selected_food_items,id="State")
+#changing all the Y values to 1 and N to 0 in all the food products
+meltselection$value<-ifelse(meltselection$value =='Y', 1,0)
+#taking all the values that are greater than zero
+valuenotzero<-filter(meltselection,value>0)
+#grouping by State and Food items and counting the sum of the values wrt to State and Food items
+grouped_data<-summarise(group_by(valuenotzero,State,variable),count=sum(value))
+
+#merging the above data along with the Categoies table that has State, Ecozones and Regions
+mergecategories<-merge(grouped_data,Categories,by="State",all=TRUE)
+#merging the Ecozone and State column with a "-" symbol in between
+mergecategories$State<- paste(mergecategories$State, "-", mergecategories$Ecozones)
+#dropping the extra Ecozone table
+mergecategories1<-subset(mergecategories,select=-(Ecozones))
+#arranging them in descending order wrt the count value
+arrangedata=arrange(mergecategories1,desc(count))
+#omitting the NA rows
+arrangedata_omitna<-na.omit(arrangedata)
+#using the top 50 data from the abive table
+top50data<-head(arrangedata_omitna,50)
+#where the top 50 produces are being sold in USA
+
+ggplot(data=top50data, aes(x=variable, y=count,fill=State)) + geom_bar(stat="identity")+ coord_flip()+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+ylab("Count")+xlab("Food_items")+theme(legend.background = element_rect(size=0.4, linetype="solid", colour ="black")) +ggtitle("Top 50 data of which produces are most sold where in the US")+ theme(plot.title = element_text(hjust = 0))
+
+##Selecting the columns from farmers_market_info used for plotting
+selected_data<-select(farmers_market_info,State,Credit,WIC,WICcash,SFMNP,SNAP)
+#melting the table with State as ID
+melt_selection<-melt(selected_data,id="State")
+#changing all the Y values to 1 and N to 0 in all the payment methods
+melt_selection$value<-ifelse(melt_selection$value =='Y', 1,0)
+#taking all the values that are greater than zero
+valuenotzero1<-filter(melt_selection,value>0)
+#grouping by State and Payment methods and counting the sum of the values wrt to State and  Payment methods
+grouped_data<-summarise(group_by(valuenotzero1,variable,State),count=sum(value))
+
+#merging the above data along with the Categories table that has State, Ecozones and Regions
+merge_table1<-merge(grouped_data,Categories,by="State",all=TRUE)
+#dropping the extra Ecozone table
+droptable<-subset(merge_table1,select=-(Ecozones))
+#taking out only the max of count wrt to each State
+max_val<-setDT(droptable)[, .SD[which.max(count)], State]
+finaltable<-na.omit(max_val)
+#merging the Region and State column with a "-" symbol in between
+finaltable$State<- paste(finaltable$State, "-", finaltable$Region)
+#dropping the extra Region table
+finaldroptable<-subset(finaltable,select=-(Region))
+names(finaldroptable)[2]<-"Type_of_payment"
+
+#Maximum Payment mode used in each state
+ggplot(data=finaldroptable,aes(x=State,y<-count))+geom_point(aes(color=Type_of_payment,group=Type_of_payment),size=2)+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+xlab("States")+ylab("Count")+ theme(plot.title = element_text(hjust = 0.5)) +ggtitle("Maximum Payment Mode Used in Each State") 
+
+
+```
